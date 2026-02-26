@@ -10,6 +10,9 @@ using namespace bootfxd;
 namespace fs = std::filesystem;
 
 
+/*
+ Recursively hash all regular files in directory
+*/
 static void hash_directory(
     const string& prefix,
     const fs::path& directory,
@@ -29,26 +32,32 @@ static void hash_directory(
             {
                 if (entry.is_regular_file())
                 {
-                    string path = entry.path().string();
+                    string hash;
+                    string error;
 
-                    string hash = sha256_file(path);
-
-                    if (!hash.empty())
-                        hashes[prefix + path] = hash;
+                    if (sha256File(entry.path(), hash, error))
+                    {
+                        hashes[prefix + entry.path().string()] = hash;
+                    }
                 }
             }
             catch (...)
             {
+                // skip unreadable files safely
                 continue;
             }
         }
     }
     catch (...)
     {
+        // skip inaccessible directories safely
     }
 }
 
 
+/*
+ Detect boot mode
+*/
 string detect_boot_mode()
 {
     try
@@ -64,51 +73,40 @@ string detect_boot_mode()
 }
 
 
+/*
+ Hash MBR using proper hashing API
+*/
 static string hash_mbr()
 {
     try
     {
-        ifstream device("/dev/sda", ios::binary);
+        string hash;
+        string error;
 
-        if (!device)
-            return "";
-
-        char buffer[512];
-
-        device.read(buffer, 512);
-
-        if (device.gcount() <= 0)
-            return "";
-
-        string temp = "/tmp/.bootfxd_mbr";
-
-        ofstream tmp(temp, ios::binary);
-
-        if (!tmp)
-            return "";
-
-        tmp.write(buffer, device.gcount());
-        tmp.close();
-
-        string hash = sha256_file(temp);
-
-        fs::remove(temp);
-
-        return hash;
+        if (sha256Mbr("/dev/sda", hash, error))
+        {
+            return hash;
+        }
     }
     catch (...)
     {
-        return "";
     }
+
+    return "";
 }
 
 
+/*
+ Collect hashes of boot-critical components
+*/
 map<string, string> collect_hashes()
 {
     map<string, string> hashes;
 
     string mode = detect_boot_mode();
 
+
+    // UEFI mode
     if (mode == "UEFI")
     {
         hash_directory(
@@ -118,14 +116,27 @@ map<string, string> collect_hashes()
     }
     else
     {
+        // BIOS mode → hash MBR
         string mbr_hash = hash_mbr();
 
         if (!mbr_hash.empty())
+        {
             hashes["MBR:/dev/sda"] = mbr_hash;
+        }
     }
 
-    hash_directory("BOOT:", "/boot/grub/", hashes);
-    hash_directory("BOOT:", "/boot/grub2/", hashes);
+
+    // Hash GRUB directories (both modes)
+    hash_directory(
+        "BOOT:",
+        "/boot/grub/",
+        hashes);
+
+    hash_directory(
+        "BOOT:",
+        "/boot/grub2/",
+        hashes);
+
 
     return hashes;
 }
