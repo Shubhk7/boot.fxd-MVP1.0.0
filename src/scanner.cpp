@@ -5,6 +5,8 @@
 #include <fstream>
 
 using namespace std;
+using namespace bootfxd;
+
 namespace fs = std::filesystem;
 
 
