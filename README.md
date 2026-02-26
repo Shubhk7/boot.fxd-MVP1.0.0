@@ -97,17 +97,48 @@ Tested on:
 
 ---
 
-#GUI Features:
-  Dark theme (default)
-  Light theme toggle
-  Interactive dashboard
-  Integrity status display
-  Modern cybersecurity UI
-
+🖥️ GUI Usage
 ---
+Run GUI from project root:
+```
+python3 gui/gui.py
+```
+GUI Features:
 
-#🧠 Threat Detection
+  Dark theme (default)
 
+  Light theme toggle
+
+  Interactive dashboard
+
+  Integrity status display
+
+  Modern cybersecurity interface
+
+🔐 How It Works
+---
+Boot.fxd scans and hashes critical boot components.
+
+UEFI Systems
+
+Scans:
+```
+/boot/efi/EFI/
+/boot/grub/
+/boot/grub2/
+```
+BIOS Systems
+
+Scans:
+```
+MBR (/dev/sda)
+/boot/grub/
+/boot/grub2/
+```
+Hashes are stored in baseline.json and compared during integrity checks.
+
+🧠 Threat Detection
+---
 Boot.fxd detects:
 
 • Bootkits
@@ -116,46 +147,80 @@ Boot.fxd detects:
 • EFI modification
 • MBR modification
 • Persistent boot malware
----
-#⚡ Performance
 
+⚡ Performance
+---
 Typical scan time: < 1 second
 Memory usage: Very low
 CPU usage: Minimal
 
-Designed for speed and efficiency.
+Designed to be fast and lightweight.
 
+🛠️ Tech Stack
 ---
+Backend: 
 
-#🛠️ Tech Stack
-
-Backend:
   C++17
+
   OpenSSL SHA-256
+
   Linux filesystem APIs
+
 Frontend:
+
   Python 3
+
   PyQt6
 
+🎯 Use Cases
+---
+Boot integrity monitoring
+
+Rootkit detection
+
+Security research
+
+Cybersecurity education
+
+Malware analysis
+
+
+⚠️ Security Notes
+---
+Requires root privileges to access:
+
+/dev/sda
+/boot
+/boot/efi
+
+Baseline should be created on trusted system.
+
+📜 License
+---
+MIT License
+
+See LICENSE file for details.
+
+👨‍💻 Author
+---
+Boot.fxd Boot Integrity Monitor
+Cybersecurity Integrity Monitoring Project
+
+⭐ Future Improvements
+---
+Real-time monitoring
+
+TPM integration
+
+Secure baseline signing
+
+Automatic alerts
+
+Kernel-level monitoring
+
+🛡️ Summary
 ---
 
-## Dependencies
+Boot.fxd provides a lightweight, fast, and secure way to verify boot integrity and detect boot-level persistence mechanisms.
 
-Install required packages:
-
-```bash
-sudo apt update
-sudo apt install g++ libssl-dev python3-pyqt6 python3-pip
-```
-🔨 Build Instructions
-
-Clone repository:
-```bash
-git clone https://github.com/YOUR_USERNAME/boot.fxd.git
-cd boot.fxd-MVP1.0.0
-```
-
-Compile backend:
-```bash
-g++ -std=c++17 src/*.cpp -Iinclude -lssl -lcrypto -o boot.fxd
-```
+Designed for cybersecurity, research, and integrity monitoring.
