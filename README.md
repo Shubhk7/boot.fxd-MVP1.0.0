@@ -96,20 +96,17 @@ Tested on:
 - Ubuntu VM (VMware / VirtualBox)
 
 ---
-GUI Features:
 
-Dark theme (default)
+#GUI Features:
+  Dark theme (default)
+  Light theme toggle
+  Interactive dashboard
+  Integrity status display
+  Modern cybersecurity UI
 
-Light theme toggle
-
-Interactive dashboard
-
-Integrity status display
-
-Modern cybersecurity UI
 ---
 
-🧠 Threat Detection
+#🧠 Threat Detection
 
 Boot.fxd detects:
 
@@ -120,30 +117,26 @@ Boot.fxd detects:
 • MBR modification
 • Persistent boot malware
 ---
-⚡ Performance
+#⚡ Performance
 
 Typical scan time: < 1 second
 Memory usage: Very low
 CPU usage: Minimal
 
 Designed for speed and efficiency.
+
 ---
 
-🛠️ Tech Stack
+#🛠️ Tech Stack
 
 Backend:
-
-C++17
-
-OpenSSL SHA-256
-
-Linux filesystem APIs
-
+  C++17
+  OpenSSL SHA-256
+  Linux filesystem APIs
 Frontend:
+  Python 3
+  PyQt6
 
-Python 3
-
-PyQt6
 ---
 
 ## Dependencies
