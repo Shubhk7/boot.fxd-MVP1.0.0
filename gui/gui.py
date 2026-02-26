@@ -3,141 +3,163 @@ import json
 import subprocess
 
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QTextEdit, QLabel, QCheckBox, QFrame
+    QApplication, QWidget, QMainWindow,
+    QPushButton, QLabel, QTextEdit,
+    QVBoxLayout, QHBoxLayout, QFrame,
+    QProgressBar, QCheckBox
 )
 
-from PyQt6.QtCore import Qt, QPropertyAnimation
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 
 
-BOOTFXD_PATH = "./boot.fxd"
+BACKEND = "./boot.fxd"
 
 
 DARK_THEME = """
-QWidget {
-    background-color: #121212;
-    color: #e0e0e0;
-    font-family: Segoe UI;
+QMainWindow {
+    background-color: #0b0f17;
+}
+
+QFrame {
+    background-color: #111827;
+    border-radius: 10px;
+}
+
+QLabel {
+    color: white;
 }
 
 QPushButton {
-    background-color: #1f1f1f;
-    border: 1px solid #333;
-    padding: 10px;
+    background-color: #2563eb;
+    color: white;
     border-radius: 6px;
+    padding: 8px;
 }
 
 QPushButton:hover {
-    background-color: #2a2a2a;
+    background-color: #1d4ed8;
 }
 
 QTextEdit {
-    background-color: #1a1a1a;
-    border: 1px solid #333;
+    background-color: #020617;
+    color: #00ffcc;
     border-radius: 6px;
 }
 
-QCheckBox {
-    padding: 5px;
+QProgressBar {
+    border-radius: 6px;
+    text-align: center;
 }
 """
 
 
 LIGHT_THEME = """
-QWidget {
-    background-color: #f5f5f5;
-    color: #111;
-    font-family: Segoe UI;
+QMainWindow {
+    background-color: #f3f4f6;
+}
+
+QFrame {
+    background-color: white;
+    border-radius: 10px;
+}
+
+QLabel {
+    color: black;
 }
 
 QPushButton {
-    background-color: #ffffff;
-    border: 1px solid #ccc;
-    padding: 10px;
-    border-radius: 6px;
-}
-
-QPushButton:hover {
-    background-color: #eaeaea;
+    background-color: #2563eb;
+    color: white;
 }
 
 QTextEdit {
-    background-color: #ffffff;
-    border: 1px solid #ccc;
-    border-radius: 6px;
+    background-color: white;
+    color: black;
 }
 """
 
 
-class BootIntegrityGUI(QWidget):
+class BootFXD(QMainWindow):
 
     def __init__(self):
-
         super().__init__()
 
-        self.setWindowTitle("Boot Integrity Monitor")
-        self.resize(750, 520)
+        self.setWindowTitle("Boot.fxd Security Dashboard")
+        self.setGeometry(100, 100, 900, 600)
 
         self.setStyleSheet(DARK_THEME)
 
+        self.build_ui()
+
+
+    def build_ui(self):
+
+        main = QHBoxLayout()
+
+        sidebar = self.sidebar()
+        dashboard = self.dashboard()
+
+        main.addWidget(sidebar)
+        main.addWidget(dashboard)
+
+        container = QWidget()
+        container.setLayout(main)
+
+        self.setCentralWidget(container)
+
+
+    def sidebar(self):
+
+        frame = QFrame()
+        frame.setFixedWidth(200)
+
         layout = QVBoxLayout()
 
-        # Header
-        header = QLabel("BOOT INTEGRITY MONITOR")
-        header.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
-        header.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title = QLabel("Boot.fxd")
+        title.setFont(QFont("Arial", 18))
+        layout.addWidget(title)
 
-        layout.addWidget(header)
+        init_btn = QPushButton("Initialize Baseline")
+        init_btn.clicked.connect(self.init_baseline)
 
-        # Status box
-        self.status_box = QLabel("STATUS: UNKNOWN")
-        self.status_box.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_box.setFont(QFont("Segoe UI", 16))
+        scan_btn = QPushButton("Scan System")
+        scan_btn.clicked.connect(self.scan)
 
-        self.status_box.setFrameShape(QFrame.Shape.Box)
-        self.status_box.setStyleSheet("""
-            border: 2px solid #444;
-            padding: 10px;
-        """)
+        theme = QCheckBox("Light Mode")
+        theme.stateChanged.connect(self.toggle_theme)
 
-        layout.addWidget(self.status_box)
+        layout.addWidget(init_btn)
+        layout.addWidget(scan_btn)
+        layout.addWidget(theme)
+        layout.addStretch()
 
-        # Buttons
-        button_layout = QHBoxLayout()
+        frame.setLayout(layout)
 
-        self.init_btn = QPushButton("Initialize Baseline")
-        self.scan_btn = QPushButton("Scan System")
+        return frame
 
-        self.init_btn.clicked.connect(self.init_baseline)
-        self.scan_btn.clicked.connect(self.scan_system)
 
-        button_layout.addWidget(self.init_btn)
-        button_layout.addWidget(self.scan_btn)
+    def dashboard(self):
 
-        layout.addLayout(button_layout)
+        frame = QFrame()
 
-        # Theme toggle
-        self.theme_toggle = QCheckBox("Light Theme")
-        self.theme_toggle.stateChanged.connect(self.toggle_theme)
+        layout = QVBoxLayout()
 
-        layout.addWidget(self.theme_toggle)
+        self.status = QLabel("System Status: UNKNOWN")
+        self.status.setFont(QFont("Arial", 22))
 
-        # Output
+        self.progress = QProgressBar()
+        self.progress.setValue(0)
+
         self.output = QTextEdit()
-        self.output.setReadOnly(True)
 
+        layout.addWidget(self.status)
+        layout.addWidget(self.progress)
         layout.addWidget(self.output)
 
-        self.setLayout(layout)
+        frame.setLayout(layout)
 
-
-    def toggle_theme(self):
-
-        if self.theme_toggle.isChecked():
-            self.setStyleSheet(LIGHT_THEME)
-        else:
-            self.setStyleSheet(DARK_THEME)
+        return frame
 
 
     def run_backend(self, arg):
@@ -145,7 +167,7 @@ class BootIntegrityGUI(QWidget):
         try:
 
             result = subprocess.run(
-                ["sudo", BOOTFXD_PATH, arg],
+                ["sudo", BACKEND, arg],
                 capture_output=True,
                 text=True
             )
@@ -153,89 +175,75 @@ class BootIntegrityGUI(QWidget):
             return json.loads(result.stdout)
 
         except Exception as e:
-
             return {"status": "error", "message": str(e)}
-
-
-    def animate_status(self, color):
-
-        self.anim = QPropertyAnimation(self.status_box, b"windowOpacity")
-        self.anim.setDuration(300)
-        self.anim.setStartValue(0.5)
-        self.anim.setEndValue(1)
-        self.anim.start()
-
-        self.status_box.setStyleSheet(f"""
-            border: 2px solid {color};
-            padding: 10px;
-        """)
 
 
     def init_baseline(self):
 
         self.output.setText("Initializing baseline...")
+        self.progress.setValue(30)
 
         data = self.run_backend("--init")
 
+        self.progress.setValue(100)
+
         if data["status"] == "baseline_created":
-
-            self.status_box.setText("BASELINE CREATED")
-            self.animate_status("#4caf50")
-
-            self.output.setText("Baseline initialized successfully.")
-
+            self.status.setText("Status: BASELINE CREATED")
         else:
+            self.status.setText("Status: ERROR")
 
-            self.status_box.setText("ERROR")
-            self.animate_status("#f44336")
-
-            self.output.setText(str(data))
+        self.output.setText(str(data))
 
 
-    def scan_system(self):
+    def scan(self):
+
+        self.progress.setValue(10)
 
         self.output.setText("Scanning system...")
 
+        QTimer.singleShot(500, lambda: self.progress.setValue(40))
+        QTimer.singleShot(1000, lambda: self.progress.setValue(70))
+
         data = self.run_backend("--scan")
+
+        self.progress.setValue(100)
 
         if data["status"] == "clean":
 
-            self.status_box.setText("SYSTEM SAFE")
-            self.animate_status("#4caf50")
+            self.status.setText("Status: SYSTEM SAFE")
+            self.status.setStyleSheet("color: #00ff00")
 
-            self.output.setText("No tampering detected.")
+            self.output.setText("No threats detected.")
 
         elif data["status"] == "tampered":
 
-            self.status_box.setText("SYSTEM COMPROMISED")
-            self.animate_status("#f44336")
+            self.status.setText("Status: SYSTEM COMPROMISED")
+            self.status.setStyleSheet("color: red")
 
-            text = ""
-
-            if data["modified"]:
-                text += "Modified:\n" + "\n".join(data["modified"]) + "\n\n"
-
-            if data["added"]:
-                text += "Added:\n" + "\n".join(data["added"]) + "\n\n"
-
-            if data["removed"]:
-                text += "Removed:\n" + "\n".join(data["removed"]) + "\n\n"
+            text = json.dumps(data, indent=4)
 
             self.output.setText(text)
 
         else:
 
-            self.status_box.setText("ERROR")
-            self.animate_status("#f44336")
+            self.status.setText("Status: ERROR")
 
             self.output.setText(str(data))
+
+
+    def toggle_theme(self, state):
+
+        if state:
+            self.setStyleSheet(LIGHT_THEME)
+        else:
+            self.setStyleSheet(DARK_THEME)
 
 
 if __name__ == "__main__":
 
     app = QApplication(sys.argv)
 
-    window = BootIntegrityGUI()
+    window = BootFXD()
 
     window.show()
 
