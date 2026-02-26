@@ -32,6 +32,7 @@ The system combines a high-performance C++ backend with a modern Python GUI fron
 ---
 
 # 🏗️ Architecture
+```
 ┌─────────────────────┐
 │ Python GUI          │
 │ (PyQt6)             │
@@ -48,10 +49,11 @@ The system combines a high-performance C++ backend with a modern Python GUI fron
 │ /boot/grub          │
 │ /dev/sda (MBR)      │
 └─────────────────────┘
+```
 ---
 
 # 📂 Project Structure
-
+```
 boot.fxd-MVP1.0.0/
 │
 ├── gui/
@@ -75,7 +77,7 @@ boot.fxd-MVP1.0.0/
 │ └── result.json
 │
 └── LICENSE
-
+```
 
 ---
 
