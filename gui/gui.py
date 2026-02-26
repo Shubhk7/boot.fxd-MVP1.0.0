@@ -1,55 +1,89 @@
 import sys
 import json
 import subprocess
+import platform
 
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QMainWindow,
-    QPushButton, QLabel, QTextEdit,
+    QApplication, QMainWindow, QWidget,
+    QLabel, QPushButton, QTextEdit,
     QVBoxLayout, QHBoxLayout, QFrame,
-    QProgressBar, QCheckBox
+    QProgressBar, QCheckBox, QGridLayout
 )
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
 from PyQt6.QtGui import QFont
 
 
 BACKEND = "./boot.fxd"
 
 
+# Worker thread for scan
+class ScanThread(QThread):
+    finished = pyqtSignal(dict)
+
+    def run(self):
+        result = subprocess.run(
+            ["sudo", BACKEND, "--scan"],
+            capture_output=True,
+            text=True
+        )
+
+        try:
+            data = json.loads(result.stdout)
+        except:
+            data = {"status": "error"}
+
+        self.finished.emit(data)
+
+
+# Worker thread for init
+class InitThread(QThread):
+    finished = pyqtSignal(dict)
+
+    def run(self):
+        result = subprocess.run(
+            ["sudo", BACKEND, "--init"],
+            capture_output=True,
+            text=True
+        )
+
+        try:
+            data = json.loads(result.stdout)
+        except:
+            data = {"status": "error"}
+
+        self.finished.emit(data)
+
+
 DARK_THEME = """
 QMainWindow {
-    background-color: #0b0f17;
+    background-color: #0a0f1c;
 }
-
 QFrame {
     background-color: #111827;
-    border-radius: 10px;
+    border-radius: 12px;
 }
-
 QLabel {
-    color: white;
+    color: #e5e7eb;
 }
-
 QPushButton {
     background-color: #2563eb;
     color: white;
-    border-radius: 6px;
-    padding: 8px;
+    padding: 10px;
+    border-radius: 8px;
+    font-weight: bold;
 }
-
 QPushButton:hover {
     background-color: #1d4ed8;
 }
-
 QTextEdit {
     background-color: #020617;
     color: #00ffcc;
-    border-radius: 6px;
+    border-radius: 8px;
 }
-
 QProgressBar {
-    border-radius: 6px;
-    text-align: center;
+    border-radius: 8px;
+    height: 18px;
 }
 """
 
@@ -58,21 +92,12 @@ LIGHT_THEME = """
 QMainWindow {
     background-color: #f3f4f6;
 }
-
 QFrame {
     background-color: white;
-    border-radius: 10px;
 }
-
 QLabel {
     color: black;
 }
-
-QPushButton {
-    background-color: #2563eb;
-    color: white;
-}
-
 QTextEdit {
     background-color: white;
     color: black;
@@ -85,8 +110,8 @@ class BootFXD(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("Boot.fxd Security Dashboard")
-        self.setGeometry(100, 100, 900, 600)
+        self.setWindowTitle("Boot.fxd Security Center")
+        self.resize(1000, 650)
 
         self.setStyleSheet(DARK_THEME)
 
@@ -95,16 +120,13 @@ class BootFXD(QMainWindow):
 
     def build_ui(self):
 
-        main = QHBoxLayout()
+        root = QHBoxLayout()
 
-        sidebar = self.sidebar()
-        dashboard = self.dashboard()
-
-        main.addWidget(sidebar)
-        main.addWidget(dashboard)
+        root.addWidget(self.sidebar())
+        root.addWidget(self.dashboard())
 
         container = QWidget()
-        container.setLayout(main)
+        container.setLayout(root)
 
         self.setCentralWidget(container)
 
@@ -112,13 +134,13 @@ class BootFXD(QMainWindow):
     def sidebar(self):
 
         frame = QFrame()
-        frame.setFixedWidth(200)
+        frame.setFixedWidth(220)
 
         layout = QVBoxLayout()
 
-        title = QLabel("Boot.fxd")
-        title.setFont(QFont("Arial", 18))
-        layout.addWidget(title)
+        logo = QLabel("Boot.fxd")
+        logo.setFont(QFont("Arial", 22))
+        layout.addWidget(logo)
 
         init_btn = QPushButton("Initialize Baseline")
         init_btn.clicked.connect(self.init_baseline)
@@ -142,93 +164,141 @@ class BootFXD(QMainWindow):
     def dashboard(self):
 
         frame = QFrame()
-
         layout = QVBoxLayout()
 
-        self.status = QLabel("System Status: UNKNOWN")
-        self.status.setFont(QFont("Arial", 22))
+        header = QLabel("Security Dashboard")
+        header.setFont(QFont("Arial", 20))
+
+        layout.addWidget(header)
+        layout.addWidget(self.cards())
 
         self.progress = QProgressBar()
-        self.progress.setValue(0)
-
-        self.output = QTextEdit()
-
-        layout.addWidget(self.status)
         layout.addWidget(self.progress)
-        layout.addWidget(self.output)
+
+        self.log = QTextEdit()
+        layout.addWidget(self.log)
 
         frame.setLayout(layout)
 
         return frame
 
 
-    def run_backend(self, arg):
+    def cards(self):
 
-        try:
+        grid = QGridLayout()
 
-            result = subprocess.run(
-                ["sudo", BACKEND, arg],
-                capture_output=True,
-                text=True
-            )
+        self.status_card = self.make_card("Status", "UNKNOWN")
+        self.threat_card = self.make_card("Threat Level", "NONE")
 
-            return json.loads(result.stdout)
+        self.system_card = self.make_card(
+            "System",
+            f"{platform.system()} {platform.release()}"
+        )
 
-        except Exception as e:
-            return {"status": "error", "message": str(e)}
+        grid.addWidget(self.status_card, 0, 0)
+        grid.addWidget(self.threat_card, 0, 1)
+        grid.addWidget(self.system_card, 0, 2)
+
+        container = QFrame()
+        container.setLayout(grid)
+
+        return container
 
 
+    def make_card(self, title, value):
+
+        frame = QFrame()
+        layout = QVBoxLayout()
+
+        t = QLabel(title)
+        t.setFont(QFont("Arial", 12))
+
+        v = QLabel(value)
+        v.setFont(QFont("Arial", 18))
+
+        layout.addWidget(t)
+        layout.addWidget(v)
+
+        frame.setLayout(layout)
+        frame.value_label = v
+
+        return frame
+
+
+    # Initialize baseline
     def init_baseline(self):
 
-        self.output.setText("Initializing baseline...")
-        self.progress.setValue(30)
+        self.log.setText("Initializing baseline...")
+        self.progress.setValue(0)
 
-        data = self.run_backend("--init")
+        self.init_thread = InitThread()
+        self.init_thread.finished.connect(self.init_complete)
+        self.init_thread.start()
+
+        self.animate_progress()
+
+
+    def init_complete(self, data):
 
         self.progress.setValue(100)
 
         if data["status"] == "baseline_created":
-            self.status.setText("Status: BASELINE CREATED")
+            self.status_card.value_label.setText("BASELINE CREATED")
+            self.log.setText("Baseline created successfully.")
         else:
-            self.status.setText("Status: ERROR")
-
-        self.output.setText(str(data))
+            self.log.setText("Error creating baseline.")
 
 
+    # Scan system
     def scan(self):
 
-        self.progress.setValue(10)
+        self.log.setText("Scanning system...")
+        self.progress.setValue(0)
 
-        self.output.setText("Scanning system...")
+        self.scan_thread = ScanThread()
+        self.scan_thread.finished.connect(self.scan_complete)
+        self.scan_thread.start()
 
-        QTimer.singleShot(500, lambda: self.progress.setValue(40))
-        QTimer.singleShot(1000, lambda: self.progress.setValue(70))
+        self.animate_progress()
 
-        data = self.run_backend("--scan")
+
+    def scan_complete(self, data):
 
         self.progress.setValue(100)
 
         if data["status"] == "clean":
 
-            self.status.setText("Status: SYSTEM SAFE")
-            self.status.setStyleSheet("color: #00ff00")
+            self.status_card.value_label.setText("SAFE")
+            self.status_card.value_label.setStyleSheet("color: #22c55e")
 
-            self.output.setText("No threats detected.")
+            self.threat_card.value_label.setText("NONE")
 
-        elif data["status"] == "tampered":
-
-            self.status.setText("Status: SYSTEM COMPROMISED")
-            self.status.setStyleSheet("color: red")
-
-            text = json.dumps(data, indent=4)
-
-            self.output.setText(text)
+            self.log.setText("No threats detected.")
 
         else:
 
-            self.status.setText("Status: ERROR")
+            self.status_card.value_label.setText("COMPROMISED")
+            self.status_card.value_label.setStyleSheet("color: red")
 
-            self.output.setText(str(data))
+            self.threat_card.value_label.setText("HIGH")
+
+            self.log.setText(json.dumps(data, indent=4))
+
+
+    # Progress animation
+    def animate_progress(self):
+
+        self.progress_timer = QTimer()
+
+        def update():
+            val = self.progress.value()
+            if val < 90:
+                self.progress.setValue(val + 2)
+            else:
+                self.progress_timer.stop()
+
+        self.progress_timer.timeout.connect(update)
+        self.progress_timer.start(50)
 
 
     def toggle_theme(self, state):
