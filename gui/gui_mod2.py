@@ -4,6 +4,8 @@ import threading
 import json
 import platform
 import time
+import os
+
 from datetime import datetime
 
 
@@ -24,6 +26,62 @@ last_scan_time = "Never"
 
 
 # ============================================
+# SYSTEM DETECTION
+# ============================================
+
+def get_boot_mode():
+
+    try:
+        if os.path.exists("/sys/firmware/efi"):
+            return "UEFI"
+        else:
+            return "BIOS"
+    except:
+        return "Unknown"
+
+
+def get_secure_boot_status():
+
+    try:
+
+        result = subprocess.run(
+            ["mokutil", "--sb-state"],
+            capture_output=True,
+            text=True
+        )
+
+        output = result.stdout.lower()
+
+        if "enabled" in output:
+            return "Enabled"
+
+        elif "disabled" in output:
+            return "Disabled"
+
+        else:
+            return "Unknown"
+
+    except:
+        return "Not Available"
+
+
+def get_tpm_status():
+
+    try:
+
+        if os.path.exists("/dev/tpm0") or os.path.exists("/dev/tpmrm0"):
+            return "Present"
+
+        if os.path.exists("/sys/class/tpm"):
+            return "Present"
+
+        return "Not Present"
+
+    except:
+        return "Unknown"
+
+
+# ============================================
 # THEME
 # ============================================
 
@@ -33,12 +91,12 @@ def setup_theme():
 
         with dpg.theme_component(dpg.mvAll):
 
-            dpg.add_theme_color(dpg.mvThemeCol_WindowBg, (13, 17, 23))
-            dpg.add_theme_color(dpg.mvThemeCol_ChildBg, (22, 27, 34))
-            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (22, 27, 34))
-            dpg.add_theme_color(dpg.mvThemeCol_Button, (0, 170, 140))
-            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (0, 255, 170))
-            dpg.add_theme_color(dpg.mvThemeCol_Text, (200, 220, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_WindowBg, (13,17,23))
+            dpg.add_theme_color(dpg.mvThemeCol_ChildBg, (22,27,34))
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (22,27,34))
+            dpg.add_theme_color(dpg.mvThemeCol_Button, (0,170,140))
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (0,255,170))
+            dpg.add_theme_color(dpg.mvThemeCol_Text, (200,220,255))
 
     dpg.bind_theme("cyber_theme")
 
@@ -55,7 +113,7 @@ def log(message, level="INFO"):
         "INFO": "[INFO]",
         "WARN": "[WARN]",
         "THREAT": "[THREAT]"
-    }[level]
+    }.get(level, "[INFO]")
 
     current = dpg.get_value("log_console")
 
@@ -73,19 +131,20 @@ def log(message, level="INFO"):
 def set_status(status):
 
     colors = {
-        "SAFE": (0, 255, 140),
-        "SCANNING": (255, 255, 0),
-        "COMPROMISED": (255, 60, 60),
-        "INITIALIZING": (255, 170, 0),
-        "UNKNOWN": (150, 150, 150)
+        "SAFE": (0,255,140),
+        "SCANNING": (255,255,0),
+        "COMPROMISED": (255,60,60),
+        "INITIALIZING": (255,170,0),
+        "UNKNOWN": (150,150,150)
     }
 
-    dpg.configure_item("status_indicator", color=colors[status])
+    dpg.configure_item("status_indicator", color=colors.get(status, (150,150,150)))
+
     dpg.set_value("status_text", status)
 
 
 # ============================================
-# BACKEND
+# BACKEND RUNNER
 # ============================================
 
 def run_backend(arg):
@@ -102,11 +161,14 @@ def run_backend(arg):
 
     except Exception as e:
 
-        return {"status": "error", "message": str(e)}
+        return {
+            "status": "error",
+            "message": str(e)
+        }
 
 
 # ============================================
-# THREAD WORKERS (NO UI HERE)
+# THREAD WORKERS
 # ============================================
 
 def scan_worker():
@@ -135,6 +197,7 @@ def scan_callback():
         return
 
     scan_result = None
+
     scan_running = True
 
     dpg.configure_item("scan_btn", enabled=False)
@@ -156,6 +219,7 @@ def init_callback():
         return
 
     init_result = None
+
     init_running = True
 
     dpg.configure_item("init_btn", enabled=False)
@@ -170,7 +234,7 @@ def init_callback():
 
 
 # ============================================
-# MAIN UI UPDATE LOOP (THREAD SAFE)
+# UPDATE LOOP
 # ============================================
 
 def update_loop():
@@ -186,7 +250,7 @@ def update_loop():
         if progress < 0.95:
             dpg.set_value("progress_bar", progress + 0.002)
 
-    # scan finished
+
     if scan_running and scan_result is not None:
 
         dpg.set_value("progress_bar", 1.0)
@@ -195,14 +259,16 @@ def update_loop():
 
         dpg.set_value("last_scan", last_scan_time)
 
-        if scan_result["status"] == "clean":
+        if scan_result.get("status") == "clean":
 
             set_status("SAFE")
+
             log("System integrity verified")
 
         else:
 
             set_status("COMPROMISED")
+
             log("Boot integrity violation detected", "THREAT")
 
             log(json.dumps(scan_result, indent=2), "THREAT")
@@ -211,24 +277,27 @@ def update_loop():
 
         dpg.configure_item("scan_btn", enabled=True)
 
-    # init finished
+
     if init_running and init_result is not None:
 
         dpg.set_value("progress_bar", 1.0)
 
-        if init_result["status"] == "baseline_created":
+        if init_result.get("status") == "baseline_created":
 
             set_status("SAFE")
+
             log("Baseline created successfully")
 
         else:
 
             set_status("UNKNOWN")
+
             log("Baseline creation failed", "WARN")
 
         init_running = False
 
         dpg.configure_item("init_btn", enabled=True)
+
 
     dpg.set_frame_callback(
         dpg.get_frame_count() + 1,
@@ -237,50 +306,35 @@ def update_loop():
 
 
 # ============================================
-# SYSTEM INFO
-# ============================================
-
-def get_boot_mode():
-
-    try:
-
-        result = subprocess.run(
-            ["test", "-d", "/sys/firmware/efi"]
-        )
-
-        return "UEFI" if result.returncode == 0 else "BIOS"
-
-    except:
-
-        return "Unknown"
-
-
-# ============================================
 # UI BUILD
 # ============================================
+
 def build_ui():
 
     dpg.create_context()
 
     setup_theme()
 
-    # Create main window properly sized
+    boot_mode = get_boot_mode()
+
+    secure_boot = get_secure_boot_status()
+
+    tpm_status = get_tpm_status()
+
     with dpg.window(
         tag="main_window",
         no_move=True,
         no_resize=True,
-        no_close=True,
-        no_collapse=True
+        no_close=True
     ):
 
-        # Header
         with dpg.child_window(height=60):
 
             with dpg.group(horizontal=True):
 
                 dpg.add_text(
                     "BOOT.FXD Security Dashboard",
-                    color=(0, 255, 170)
+                    color=(0,255,170)
                 )
 
                 dpg.add_spacer(width=20)
@@ -295,24 +349,25 @@ def build_ui():
                     f"{platform.system()} {platform.release()}"
                 )
 
-        # Body layout
+
         with dpg.group(horizontal=True):
 
-            # Sidebar
             with dpg.child_window(width=250):
 
                 dpg.add_text("SYSTEM")
+
                 dpg.add_separator()
 
-                dpg.add_text(f"Boot Mode: {get_boot_mode()}")
+                dpg.add_text(f"Boot Mode: {boot_mode}")
 
-                dpg.add_text("Secure Boot: Unknown")
+                dpg.add_text(f"Secure Boot: {secure_boot}")
 
-                dpg.add_text("TPM: Unknown")
+                dpg.add_text(f"TPM: {tpm_status}")
 
                 dpg.add_spacer(height=10)
 
                 dpg.add_text("Last Scan:")
+
                 dpg.add_text(last_scan_time, tag="last_scan")
 
                 dpg.add_spacer(height=20)
@@ -331,7 +386,7 @@ def build_ui():
                     width=-1
                 )
 
-            # Main content
+
             with dpg.child_window(width=-1):
 
                 dpg.add_text("System Integrity")
@@ -358,6 +413,7 @@ def build_ui():
                         height=-1
                     )
 
+
     dpg.create_viewport(
         title="BOOT.FXD Security Dashboard",
         width=1200,
@@ -368,7 +424,6 @@ def build_ui():
 
     dpg.show_viewport()
 
-    # IMPORTANT: set main window as primary
     dpg.set_primary_window("main_window", True)
 
     set_status("SAFE")
@@ -379,10 +434,10 @@ def build_ui():
 
     dpg.destroy_context()
 
+
 # ============================================
 # MAIN
 # ============================================
-
 
 if __name__ == "__main__":
 
