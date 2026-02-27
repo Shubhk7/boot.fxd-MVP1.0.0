@@ -1,18 +1,91 @@
+import dearpygui.dearpygui as dpg
 import subprocess
-import json
 import threading
+import json
 import platform
 import time
-
-import dearpygui.dearpygui as dpg
+from datetime import datetime
 
 
 BACKEND = "./boot.fxd"
 
 
-# -------------------------
-# Backend execution
-# -------------------------
+# ============================================
+# GLOBAL STATE
+# ============================================
+
+scan_running = False
+current_progress = 0.0
+last_scan_time = "Never"
+boot_mode = "Unknown"
+secure_boot = "Unknown"
+tpm_status = "Unknown"
+
+
+# ============================================
+# THEME
+# ============================================
+
+def setup_theme():
+
+    with dpg.theme(tag="cyber_theme"):
+
+        with dpg.theme_component(dpg.mvAll):
+
+            dpg.add_theme_color(dpg.mvThemeCol_WindowBg, (13,17,23))
+            dpg.add_theme_color(dpg.mvThemeCol_ChildBg, (22,27,34))
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (22,27,34))
+            dpg.add_theme_color(dpg.mvThemeCol_Button, (0,170,140))
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (0,255,170))
+            dpg.add_theme_color(dpg.mvThemeCol_Text, (200,220,255))
+
+    dpg.bind_theme("cyber_theme")
+
+
+# ============================================
+# LOGGING SYSTEM
+# ============================================
+
+def log(message, level="INFO"):
+
+    timestamp = datetime.now().strftime("%H:%M:%S")
+
+    color = {
+        "INFO": "[INFO]",
+        "WARN": "[WARN]",
+        "THREAT": "[THREAT]"
+    }[level]
+
+    current = dpg.get_value("log_console")
+
+    new = f"[{timestamp}] {color} {message}\n"
+
+    dpg.set_value("log_console", current + new)
+
+    dpg.set_y_scroll("log_console", 999999)
+
+
+# ============================================
+# STATUS INDICATOR
+# ============================================
+
+def set_status(status):
+
+    colors = {
+        "SAFE": (0,255,140),
+        "WARNING": (255,170,0),
+        "COMPROMISED": (255,60,60),
+        "SCANNING": (255,255,0),
+        "UNKNOWN": (150,150,150)
+    }
+
+    dpg.configure_item("status_indicator", color=colors[status])
+    dpg.set_value("status_text", status)
+
+
+# ============================================
+# BACKEND RUNNER
+# ============================================
 
 def run_backend(arg):
 
@@ -28,254 +101,277 @@ def run_backend(arg):
 
     except Exception as e:
 
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+        return {"status": "error", "message": str(e)}
 
 
-# -------------------------
-# UI helpers
-# -------------------------
+# ============================================
+# SCAN THREAD
+# ============================================
 
-def set_status(text, color):
+def scan_thread():
 
-    dpg.set_value("status_text", text)
-    dpg.configure_item("status_text", color=color)
+    global scan_running, last_scan_time
+
+    scan_running = True
+
+    dpg.configure_item("scan_btn", enabled=False)
+    dpg.configure_item("init_btn", enabled=False)
+
+    set_status("SCANNING")
+
+    log("Boot integrity scan started")
+
+    animate_progress()
+
+    result = run_backend("--scan")
+
+    stop_progress()
+
+    last_scan_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    dpg.set_value("last_scan", last_scan_time)
+
+    if result["status"] == "clean":
+
+        set_status("SAFE")
+        log("System integrity verified", "INFO")
+
+    else:
+
+        set_status("COMPROMISED")
+        log("Boot integrity violation detected", "THREAT")
+
+        log(json.dumps(result, indent=2), "THREAT")
+
+    scan_running = False
+
+    dpg.configure_item("scan_btn", enabled=True)
+    dpg.configure_item("init_btn", enabled=True)
 
 
-def set_threat(text, color):
+# ============================================
+# BASELINE THREAD
+# ============================================
 
-    dpg.set_value("threat_text", text)
-    dpg.configure_item("threat_text", color=color)
+def init_thread():
+
+    log("Creating baseline")
+
+    animate_progress()
+
+    result = run_backend("--init")
+
+    stop_progress()
+
+    if result["status"] == "baseline_created":
+
+        log("Baseline created successfully")
+
+    else:
+
+        log("Baseline creation failed", "WARN")
 
 
-def set_log(text):
-
-    dpg.set_value("log_console", text)
-
-
-def set_progress(val):
-
-    dpg.set_value("progress_bar", val)
-
-
-# -------------------------
-# Progress animation
-# -------------------------
-
-progress_running = False
-
+# ============================================
+# PROGRESS SYSTEM
+# ============================================
 
 def animate_progress():
 
-    global progress_running
+    global current_progress
 
-    progress_running = True
+    current_progress = 0
 
-    progress = 0.0
+    while current_progress < 0.9 and scan_running:
 
-    while progress < 0.9 and progress_running:
+        current_progress += 0.01
 
-        progress += 0.01
+        dpg.set_value("progress_bar", current_progress)
 
-        dpg.set_value("progress_bar", progress)
+        dpg.set_value("progress_text",
+            f"{int(current_progress*100)}%")
 
         time.sleep(0.02)
 
 
 def stop_progress():
 
-    global progress_running
-
-    progress_running = False
-
     dpg.set_value("progress_bar", 1.0)
+    dpg.set_value("progress_text", "100%")
 
 
-# -------------------------
-# Initialize baseline
-# -------------------------
+# ============================================
+# BUTTON CALLBACKS
+# ============================================
 
-def init_baseline():
+def scan_callback():
 
-    def worker():
-
-        set_status("INITIALIZING...", (255, 255, 0))
-        set_log("Creating baseline...")
-
-        animate_thread = threading.Thread(target=animate_progress)
-        animate_thread.start()
-
-        data = run_backend("--init")
-
-        stop_progress()
-
-        if data["status"] == "baseline_created":
-
-            set_status("BASELINE CREATED", (0, 255, 0))
-
-            set_log("Baseline created successfully.")
-
-        else:
-
-            set_status("ERROR", (255, 0, 0))
-
-            set_log(json.dumps(data, indent=4))
-
-    threading.Thread(target=worker).start()
+    threading.Thread(target=scan_thread).start()
 
 
-# -------------------------
-# Scan system
-# -------------------------
+def init_callback():
 
-def scan_system():
-
-    def worker():
-
-        set_status("SCANNING...", (255, 255, 0))
-        set_log("Scanning system integrity...")
-
-        animate_thread = threading.Thread(target=animate_progress)
-        animate_thread.start()
-
-        data = run_backend("--scan")
-
-        stop_progress()
-
-        if data["status"] == "clean":
-
-            set_status("SYSTEM SAFE", (0, 255, 0))
-
-            set_threat("NONE", (0, 255, 0))
-
-            set_log("No threats detected.")
-
-        else:
-
-            set_status("SYSTEM COMPROMISED", (255, 0, 0))
-
-            set_threat("HIGH", (255, 0, 0))
-
-            set_log(json.dumps(data, indent=4))
-
-    threading.Thread(target=worker).start()
+    threading.Thread(target=init_thread).start()
 
 
-# -------------------------
-# DearPyGui setup
-# -------------------------
+# ============================================
+# SYSTEM INFO
+# ============================================
 
-dpg.create_context()
+def detect_system_info():
+
+    global boot_mode
+
+    if platform.system() == "Linux":
+
+        try:
+            if subprocess.run(
+                ["test","-d","/sys/firmware/efi"]
+            ).returncode == 0:
+
+                boot_mode = "UEFI"
+
+            else:
+                boot_mode = "BIOS"
+
+        except:
+            boot_mode = "Unknown"
 
 
-# Theme
-with dpg.theme() as theme:
+# ============================================
+# UI BUILDERS
+# ============================================
 
-    with dpg.theme_component(dpg.mvAll):
+def build_header():
 
-        dpg.add_theme_color(
-            dpg.mvThemeCol_WindowBg,
-            (10, 15, 30),
-            category=dpg.mvThemeCat_Core
-        )
+    with dpg.child_window(height=60):
 
-
-dpg.bind_theme(theme)
-
-
-# Main window
-with dpg.window(
-    label="Boot.fxd Security Dashboard",
-    width=900,
-    height=600
-):
-
-    with dpg.group(horizontal=True):
-
-        # Sidebar
-        with dpg.child_window(width=220):
+        with dpg.group(horizontal=True):
 
             dpg.add_text(
-                "Boot.fxd",
-                color=(0, 200, 255)
+                "BOOT.FXD Security Dashboard",
+                color=(0,255,170)
             )
 
-            dpg.add_spacer(height=10)
+            dpg.add_spacer(width=30)
 
-            dpg.add_button(
-                label="Initialize Baseline",
-                callback=lambda: init_baseline(),
-                width=-1
-            )
+            dpg.add_text("●", tag="status_indicator")
 
-            dpg.add_button(
-                label="Scan System",
-                callback=lambda: scan_system(),
-                width=-1
-            )
+            dpg.add_text("UNKNOWN", tag="status_text")
 
-            dpg.add_spacer(height=20)
-
-            dpg.add_text("System:")
+            dpg.add_spacer(width=50)
 
             dpg.add_text(
                 f"{platform.system()} {platform.release()}"
             )
 
-        # Main dashboard
-        with dpg.child_window(width=-1):
 
-            dpg.add_text("Status:")
+def build_sidebar():
 
-            dpg.add_text(
-                "UNKNOWN",
-                tag="status_text",
-                color=(255, 255, 0)
-            )
+    with dpg.child_window(width=250):
 
-            dpg.add_spacer(height=10)
+        dpg.add_text("SYSTEM")
 
-            dpg.add_text("Threat Level:")
+        dpg.add_separator()
 
-            dpg.add_text(
-                "NONE",
-                tag="threat_text",
-                color=(0, 255, 0)
-            )
+        dpg.add_text(f"Boot Mode: {boot_mode}")
 
-            dpg.add_spacer(height=10)
+        dpg.add_text("Secure Boot: Unknown")
 
-            dpg.add_progress_bar(
-                default_value=0,
-                tag="progress_bar",
-                width=-1
-            )
+        dpg.add_text("TPM: Unknown")
 
-            dpg.add_spacer(height=10)
+        dpg.add_spacer(height=10)
 
-            dpg.add_text("Log Console:")
+        dpg.add_text("Last Scan:")
 
-            dpg.add_input_text(
-                multiline=True,
-                readonly=True,
-                tag="log_console",
-                width=-1,
-                height=300
-            )
+        dpg.add_text(last_scan_time, tag="last_scan")
+
+        dpg.add_spacer(height=20)
+
+        dpg.add_button(
+            label="Initialize Baseline",
+            tag="init_btn",
+            callback=init_callback,
+            width=-1
+        )
+
+        dpg.add_button(
+            label="Scan System",
+            tag="scan_btn",
+            callback=scan_callback,
+            width=-1
+        )
 
 
-dpg.create_viewport(
-    title="Boot.fxd Security Dashboard",
-    width=900,
-    height=600
-)
+def build_main():
 
-dpg.setup_dearpygui()
+    with dpg.child_window():
 
-dpg.show_viewport()
+        dpg.add_text("System Integrity")
 
-dpg.start_dearpygui()
+        dpg.add_progress_bar(
+            tag="progress_bar",
+            width=-1
+        )
 
-dpg.destroy_context()
+        dpg.add_text("0%", tag="progress_text")
+
+        dpg.add_spacer(height=10)
+
+        dpg.add_text("Log Console")
+
+        dpg.add_input_text(
+            tag="log_console",
+            multiline=True,
+            readonly=True,
+            width=-1,
+            height=300
+        )
+
+
+# ============================================
+# MAIN UI
+# ============================================
+
+def build_ui():
+
+    detect_system_info()
+
+    dpg.create_context()
+
+    setup_theme()
+
+    with dpg.window():
+
+        build_header()
+
+        with dpg.group(horizontal=True):
+
+            build_sidebar()
+
+            build_main()
+
+    dpg.create_viewport(
+        title="BOOT.FXD Security Dashboard",
+        width=1100,
+        height=700
+    )
+
+    dpg.setup_dearpygui()
+
+    dpg.show_viewport()
+
+    set_status("SAFE")
+
+    dpg.start_dearpygui()
+
+    dpg.destroy_context()
+
+
+# ============================================
+# ENTRY POINT
+# ============================================
+
+if __name__ == "__main__":
+
+    build_ui()
