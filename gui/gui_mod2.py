@@ -33,12 +33,12 @@ def setup_theme():
 
         with dpg.theme_component(dpg.mvAll):
 
-            dpg.add_theme_color(dpg.mvThemeCol_WindowBg, (13,17,23))
-            dpg.add_theme_color(dpg.mvThemeCol_ChildBg, (22,27,34))
-            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (22,27,34))
-            dpg.add_theme_color(dpg.mvThemeCol_Button, (0,170,140))
-            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (0,255,170))
-            dpg.add_theme_color(dpg.mvThemeCol_Text, (200,220,255))
+            dpg.add_theme_color(dpg.mvThemeCol_WindowBg, (13, 17, 23))
+            dpg.add_theme_color(dpg.mvThemeCol_ChildBg, (22, 27, 34))
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (22, 27, 34))
+            dpg.add_theme_color(dpg.mvThemeCol_Button, (0, 170, 140))
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (0, 255, 170))
+            dpg.add_theme_color(dpg.mvThemeCol_Text, (200, 220, 255))
 
     dpg.bind_theme("cyber_theme")
 
@@ -73,11 +73,11 @@ def log(message, level="INFO"):
 def set_status(status):
 
     colors = {
-        "SAFE": (0,255,140),
-        "SCANNING": (255,255,0),
-        "COMPROMISED": (255,60,60),
-        "INITIALIZING": (255,170,0),
-        "UNKNOWN": (150,150,150)
+        "SAFE": (0, 255, 140),
+        "SCANNING": (255, 255, 0),
+        "COMPROMISED": (255, 60, 60),
+        "INITIALIZING": (255, 170, 0),
+        "UNKNOWN": (150, 150, 150)
     }
 
     dpg.configure_item("status_indicator", color=colors[status])
@@ -186,7 +186,6 @@ def update_loop():
         if progress < 0.95:
             dpg.set_value("progress_bar", progress + 0.002)
 
-
     # scan finished
     if scan_running and scan_result is not None:
 
@@ -212,7 +211,6 @@ def update_loop():
 
         dpg.configure_item("scan_btn", enabled=True)
 
-
     # init finished
     if init_running and init_result is not None:
 
@@ -231,7 +229,6 @@ def update_loop():
         init_running = False
 
         dpg.configure_item("init_btn", enabled=True)
-
 
     dpg.set_frame_callback(
         dpg.get_frame_count() + 1,
@@ -261,30 +258,36 @@ def get_boot_mode():
 # ============================================
 # UI BUILD
 # ============================================
-
 def build_ui():
 
     dpg.create_context()
 
     setup_theme()
 
-    with dpg.window():
+    # Create main window properly sized
+    with dpg.window(
+        tag="main_window",
+        no_move=True,
+        no_resize=True,
+        no_close=True,
+        no_collapse=True
+    ):
 
-        # header
+        # Header
         with dpg.child_window(height=60):
 
             with dpg.group(horizontal=True):
 
                 dpg.add_text(
                     "BOOT.FXD Security Dashboard",
-                    color=(0,255,170)
+                    color=(0, 255, 170)
                 )
 
                 dpg.add_spacer(width=20)
 
                 dpg.add_text("●", tag="status_indicator")
 
-                dpg.add_text("UNKNOWN", tag="status_text")
+                dpg.add_text("SAFE", tag="status_text")
 
                 dpg.add_spacer(width=40)
 
@@ -292,14 +295,13 @@ def build_ui():
                     f"{platform.system()} {platform.release()}"
                 )
 
-
+        # Body layout
         with dpg.group(horizontal=True):
 
-            # sidebar
+            # Sidebar
             with dpg.child_window(width=250):
 
                 dpg.add_text("SYSTEM")
-
                 dpg.add_separator()
 
                 dpg.add_text(f"Boot Mode: {get_boot_mode()}")
@@ -311,7 +313,6 @@ def build_ui():
                 dpg.add_spacer(height=10)
 
                 dpg.add_text("Last Scan:")
-
                 dpg.add_text(last_scan_time, tag="last_scan")
 
                 dpg.add_spacer(height=20)
@@ -330,9 +331,8 @@ def build_ui():
                     width=-1
                 )
 
-
-            # main area
-            with dpg.child_window():
+            # Main content
+            with dpg.child_window(width=-1):
 
                 dpg.add_text("System Integrity")
 
@@ -347,26 +347,29 @@ def build_ui():
 
                 with dpg.child_window(
                     tag="log_container",
-                    height=300
+                    height=-1
                 ):
 
                     dpg.add_input_text(
                         tag="log_console",
                         multiline=True,
                         readonly=True,
-                        width=-1
+                        width=-1,
+                        height=-1
                     )
-
 
     dpg.create_viewport(
         title="BOOT.FXD Security Dashboard",
-        width=1100,
-        height=700
+        width=1200,
+        height=800
     )
 
     dpg.setup_dearpygui()
 
     dpg.show_viewport()
+
+    # IMPORTANT: set main window as primary
+    dpg.set_primary_window("main_window", True)
 
     set_status("SAFE")
 
@@ -376,10 +379,10 @@ def build_ui():
 
     dpg.destroy_context()
 
-
 # ============================================
 # MAIN
 # ============================================
+
 
 if __name__ == "__main__":
 
