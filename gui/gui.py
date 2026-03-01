@@ -2,12 +2,16 @@ import sys
 import json
 import subprocess
 import platform
+import os
+
+from datetime import datetime
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget,
     QLabel, QPushButton, QTextEdit,
     QVBoxLayout, QHBoxLayout, QFrame,
-    QProgressBar, QCheckBox, QGridLayout
+    QProgressBar, QCheckBox, QGridLayout,
+    QDialog
 )
 
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
@@ -16,12 +20,70 @@ from PyQt6.QtGui import QFont
 
 BACKEND = "./boot.fxd"
 
+BASELINE_FILE = "output/baseline.json"
+HISTORY_FILE = "output/history.json"
 
-# Worker thread for scan
+
+# ============================================
+# SYSTEM DETECTION
+# ============================================
+
+def get_boot_mode():
+    return "UEFI" if os.path.exists("/sys/firmware/efi") else "BIOS"
+
+
+def get_secure_boot():
+
+    try:
+
+        result = subprocess.run(
+            ["mokutil", "--sb-state"],
+            capture_output=True,
+            text=True
+        )
+
+        if "enabled" in result.stdout.lower():
+            return "Enabled"
+
+        elif "disabled" in result.stdout.lower():
+            return "Disabled"
+
+        else:
+            return "Unknown"
+
+    except:
+        return "Not Available"
+
+
+def get_tpm():
+
+    if os.path.exists("/dev/tpm0") or os.path.exists("/dev/tpmrm0"):
+        return "Present"
+
+    if os.path.exists("/sys/class/tpm"):
+        return "Present"
+
+    return "Not Present"
+
+
+def get_os():
+    return platform.system()
+
+
+def get_kernel():
+    return platform.release()
+
+
+# ============================================
+# WORKER THREADS
+# ============================================
+
 class ScanThread(QThread):
+
     finished = pyqtSignal(dict)
 
     def run(self):
+
         result = subprocess.run(
             ["sudo", BACKEND, "--scan"],
             capture_output=True,
@@ -36,11 +98,12 @@ class ScanThread(QThread):
         self.finished.emit(data)
 
 
-# Worker thread for init
 class InitThread(QThread):
+
     finished = pyqtSignal(dict)
 
     def run(self):
+
         result = subprocess.run(
             ["sudo", BACKEND, "--init"],
             capture_output=True,
@@ -55,68 +118,109 @@ class InitThread(QThread):
         self.finished.emit(data)
 
 
+# ============================================
+# THEMES
+# ============================================
+
 DARK_THEME = """
-QMainWindow {
-    background-color: #0a0f1c;
-}
-QFrame {
-    background-color: #111827;
-    border-radius: 12px;
-}
-QLabel {
-    color: #e5e7eb;
-}
+QMainWindow { background-color: #0a0f1c; }
+QFrame { background-color: #111827; border-radius: 12px; }
+QLabel { color: #e5e7eb; }
 QPushButton {
     background-color: #2563eb;
     color: white;
     padding: 10px;
     border-radius: 8px;
-    font-weight: bold;
 }
-QPushButton:hover {
-    background-color: #1d4ed8;
-}
+QPushButton:hover { background-color: #1d4ed8; }
 QTextEdit {
     background-color: #020617;
     color: #00ffcc;
-    border-radius: 8px;
-}
-QProgressBar {
-    border-radius: 8px;
-    height: 18px;
 }
 """
 
 
 LIGHT_THEME = """
-QMainWindow {
-    background-color: #f3f4f6;
-}
-QFrame {
-    background-color: white;
-}
-QLabel {
-    color: black;
-}
-QTextEdit {
-    background-color: white;
-    color: black;
-}
+QMainWindow { background-color: #f3f4f6; }
+QFrame { background-color: white; }
+QLabel { color: black; }
+QTextEdit { background-color: white; color: black; }
 """
 
+
+# ============================================
+# MAIN WINDOW
+# ============================================
 
 class BootFXD(QMainWindow):
 
     def __init__(self):
+
         super().__init__()
 
         self.setWindowTitle("Boot.fxd Security Center")
-        self.resize(1000, 650)
+        self.resize(1100, 700)
 
         self.setStyleSheet(DARK_THEME)
 
+        self.detect_system()
+
         self.build_ui()
 
+
+    # ============================================
+    # SYSTEM DETECTION
+    # ============================================
+
+    def detect_system(self):
+
+        self.boot_mode = get_boot_mode()
+        self.secure_boot = get_secure_boot()
+        self.tpm = get_tpm()
+        self.os = get_os()
+        self.kernel = get_kernel()
+
+
+    # ============================================
+    # SAVE HISTORY
+    # ============================================
+
+    def save_scan_history(self, status):
+
+        record = {
+
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+
+            "status": status,
+
+            "secure_boot": self.secure_boot,
+
+            "tpm": self.tpm
+        }
+
+        try:
+
+            if os.path.exists(HISTORY_FILE):
+
+                with open(HISTORY_FILE, "r") as f:
+                    data = json.load(f)
+
+            else:
+
+                data = []
+
+            data.append(record)
+
+            with open(HISTORY_FILE, "w") as f:
+                json.dump(data, f, indent=4)
+
+        except:
+            pass
+
+
+    # ============================================
+    # UI BUILD
+    # ============================================
 
     def build_ui(self):
 
@@ -131,16 +235,29 @@ class BootFXD(QMainWindow):
         self.setCentralWidget(container)
 
 
+    # ============================================
+    # SIDEBAR
+    # ============================================
+
     def sidebar(self):
 
         frame = QFrame()
-        frame.setFixedWidth(220)
+        frame.setFixedWidth(260)
 
         layout = QVBoxLayout()
 
-        logo = QLabel("Boot.fxd")
-        logo.setFont(QFont("Arial", 22))
+        logo = QLabel("BOOT.FXD")
+        logo.setFont(QFont("Arial", 24))
+
         layout.addWidget(logo)
+
+        layout.addWidget(QLabel(f"OS: {self.os}"))
+        layout.addWidget(QLabel(f"Kernel: {self.kernel}"))
+        layout.addWidget(QLabel(f"Boot Mode: {self.boot_mode}"))
+        layout.addWidget(QLabel(f"Secure Boot: {self.secure_boot}"))
+        layout.addWidget(QLabel(f"TPM: {self.tpm}"))
+
+        layout.addSpacing(20)
 
         init_btn = QPushButton("Initialize Baseline")
         init_btn.clicked.connect(self.init_baseline)
@@ -148,12 +265,17 @@ class BootFXD(QMainWindow):
         scan_btn = QPushButton("Scan System")
         scan_btn.clicked.connect(self.scan)
 
+        history_btn = QPushButton("View Scan History")
+        history_btn.clicked.connect(self.show_history)
+
         theme = QCheckBox("Light Mode")
         theme.stateChanged.connect(self.toggle_theme)
 
         layout.addWidget(init_btn)
         layout.addWidget(scan_btn)
+        layout.addWidget(history_btn)
         layout.addWidget(theme)
+
         layout.addStretch()
 
         frame.setLayout(layout)
@@ -161,15 +283,21 @@ class BootFXD(QMainWindow):
         return frame
 
 
+    # ============================================
+    # DASHBOARD
+    # ============================================
+
     def dashboard(self):
 
         frame = QFrame()
+
         layout = QVBoxLayout()
 
-        header = QLabel("Security Dashboard")
-        header.setFont(QFont("Arial", 20))
+        header = QLabel("System Integrity Dashboard")
+        header.setFont(QFont("Arial", 22))
 
         layout.addWidget(header)
+
         layout.addWidget(self.cards())
 
         self.progress = QProgressBar()
@@ -183,21 +311,38 @@ class BootFXD(QMainWindow):
         return frame
 
 
+    # ============================================
+    # CARDS
+    # ============================================
+
     def cards(self):
 
         grid = QGridLayout()
 
-        self.status_card = self.make_card("Status", "UNKNOWN")
-        self.threat_card = self.make_card("Threat Level", "NONE")
+        self.integrity_card = self.make_card(
+            "Boot Integrity",
+            "Not Verified"
+        )
+
+        self.secureboot_card = self.make_card(
+            "Secure Boot",
+            self.secure_boot
+        )
+
+        self.tpm_card = self.make_card(
+            "TPM Status",
+            self.tpm
+        )
 
         self.system_card = self.make_card(
             "System",
-            f"{platform.system()} {platform.release()}"
+            f"{self.os} {self.kernel}"
         )
 
-        grid.addWidget(self.status_card, 0, 0)
-        grid.addWidget(self.threat_card, 0, 1)
-        grid.addWidget(self.system_card, 0, 2)
+        grid.addWidget(self.integrity_card, 0, 0)
+        grid.addWidget(self.secureboot_card, 0, 1)
+        grid.addWidget(self.tpm_card, 1, 0)
+        grid.addWidget(self.system_card, 1, 1)
 
         container = QFrame()
         container.setLayout(grid)
@@ -208,6 +353,7 @@ class BootFXD(QMainWindow):
     def make_card(self, title, value):
 
         frame = QFrame()
+
         layout = QVBoxLayout()
 
         t = QLabel(title)
@@ -220,16 +366,19 @@ class BootFXD(QMainWindow):
         layout.addWidget(v)
 
         frame.setLayout(layout)
+
         frame.value_label = v
 
         return frame
 
 
-    # Initialize baseline
+    # ============================================
+    # BASELINE
+    # ============================================
+
     def init_baseline(self):
 
         self.log.setText("Initializing baseline...")
-        self.progress.setValue(0)
 
         self.init_thread = InitThread()
         self.init_thread.finished.connect(self.init_complete)
@@ -243,17 +392,21 @@ class BootFXD(QMainWindow):
         self.progress.setValue(100)
 
         if data["status"] == "baseline_created":
-            self.status_card.value_label.setText("BASELINE CREATED")
-            self.log.setText("Baseline created successfully.")
-        else:
-            self.log.setText("Error creating baseline.")
+
+            self.integrity_card.value_label.setText(
+                "Baseline Established"
+            )
+
+            self.log.setText("Baseline created successfully")
 
 
-    # Scan system
+    # ============================================
+    # SCAN
+    # ============================================
+
     def scan(self):
 
-        self.log.setText("Scanning system...")
-        self.progress.setValue(0)
+        self.log.setText("Scanning boot integrity...")
 
         self.scan_thread = ScanThread()
         self.scan_thread.finished.connect(self.scan_complete)
@@ -266,40 +419,117 @@ class BootFXD(QMainWindow):
 
         self.progress.setValue(100)
 
+        self.save_scan_history(data["status"])
+
         if data["status"] == "clean":
 
-            self.status_card.value_label.setText("SAFE")
-            self.status_card.value_label.setStyleSheet("color: #22c55e")
+            self.integrity_card.value_label.setText(
+                "Boot Integrity Verified"
+            )
 
-            self.threat_card.value_label.setText("NONE")
+            self.integrity_card.value_label.setStyleSheet(
+                "color: #22c55e"
+            )
 
-            self.log.setText("No threats detected.")
+            self.log.setText(
+                "Boot integrity safe.\n"
+                f"Secure Boot: {self.secure_boot}\n"
+                f"TPM: {self.tpm}"
+            )
 
         else:
 
-            self.status_card.value_label.setText("COMPROMISED")
-            self.status_card.value_label.setStyleSheet("color: red")
+            self.integrity_card.value_label.setText(
+                "Boot Integrity Compromised"
+            )
 
-            self.threat_card.value_label.setText("HIGH")
+            self.integrity_card.value_label.setStyleSheet(
+                "color: red"
+            )
 
             self.log.setText(json.dumps(data, indent=4))
 
 
-    # Progress animation
+    # ============================================
+    # SHOW HISTORY
+    # ============================================
+
+    def show_history(self):
+
+        dialog = QDialog(self)
+
+        dialog.setWindowTitle("Scan & Baseline History")
+
+        dialog.resize(600, 400)
+
+        layout = QVBoxLayout()
+
+        text = QTextEdit()
+        text.setReadOnly(True)
+
+        history_text = ""
+
+        if os.path.exists(BASELINE_FILE):
+
+            baseline_time = datetime.fromtimestamp(
+                os.path.getmtime(BASELINE_FILE)
+            )
+
+            history_text += (
+                f"Baseline Created:\n{baseline_time}\n\n"
+            )
+
+        if os.path.exists(HISTORY_FILE):
+
+            with open(HISTORY_FILE, "r") as f:
+
+                data = json.load(f)
+
+                history_text += "Scan History:\n\n"
+
+                for entry in reversed(data):
+
+                    history_text += (
+                        f"Time: {entry['timestamp']}\n"
+                        f"Status: {entry['status']}\n"
+                        f"Secure Boot: {entry['secure_boot']}\n"
+                        f"TPM: {entry['tpm']}\n\n"
+                    )
+
+        text.setText(history_text)
+
+        layout.addWidget(text)
+
+        dialog.setLayout(layout)
+
+        dialog.exec()
+
+
+    # ============================================
+    # PROGRESS
+    # ============================================
+
     def animate_progress(self):
 
         self.progress_timer = QTimer()
 
         def update():
+
             val = self.progress.value()
+
             if val < 90:
                 self.progress.setValue(val + 2)
             else:
                 self.progress_timer.stop()
 
         self.progress_timer.timeout.connect(update)
+
         self.progress_timer.start(50)
 
+
+    # ============================================
+    # THEME
+    # ============================================
 
     def toggle_theme(self, state):
 
@@ -308,6 +538,10 @@ class BootFXD(QMainWindow):
         else:
             self.setStyleSheet(DARK_THEME)
 
+
+# ============================================
+# MAIN
+# ============================================
 
 if __name__ == "__main__":
 
