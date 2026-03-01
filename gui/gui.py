@@ -23,11 +23,7 @@ BACKEND = "./boot.fxd"
 BASELINE_FILE = "output/baseline.json"
 HISTORY_FILE = "output/history.json"
 
-
-# ============================================
 # SYSTEM DETECTION
-# ============================================
-
 def get_boot_mode():
     return "UEFI" if os.path.exists("/sys/firmware/efi") else "BIOS"
 
@@ -73,10 +69,7 @@ def get_os():
 def get_kernel():
     return platform.release()
 
-
-# ============================================
 # WORKER THREADS
-# ============================================
 
 class ScanThread(QThread):
 
@@ -117,10 +110,7 @@ class InitThread(QThread):
 
         self.finished.emit(data)
 
-
-# ============================================
 # THEMES
-# ============================================
 
 DARK_THEME = """
 QMainWindow { background-color: #0a0f1c; }
@@ -147,10 +137,7 @@ QLabel { color: black; }
 QTextEdit { background-color: white; color: black; }
 """
 
-
-# ============================================
 # MAIN WINDOW
-# ============================================
 
 class BootFXD(QMainWindow):
 
@@ -167,10 +154,7 @@ class BootFXD(QMainWindow):
 
         self.build_ui()
 
-
-    # ============================================
     # SYSTEM DETECTION
-    # ============================================
 
     def detect_system(self):
 
@@ -180,10 +164,7 @@ class BootFXD(QMainWindow):
         self.os = get_os()
         self.kernel = get_kernel()
 
-
-    # ============================================
     # SAVE HISTORY
-    # ============================================
 
     def save_scan_history(self, status):
 
@@ -217,11 +198,7 @@ class BootFXD(QMainWindow):
         except:
             pass
 
-
-    # ============================================
-    # UI BUILD
-    # ============================================
-
+# UI BUILD
     def build_ui(self):
 
         root = QHBoxLayout()
@@ -234,11 +211,7 @@ class BootFXD(QMainWindow):
 
         self.setCentralWidget(container)
 
-
-    # ============================================
     # SIDEBAR
-    # ============================================
-
     def sidebar(self):
 
         frame = QFrame()
@@ -283,9 +256,7 @@ class BootFXD(QMainWindow):
         return frame
 
 
-    # ============================================
     # DASHBOARD
-    # ============================================
 
     def dashboard(self):
 
@@ -310,10 +281,8 @@ class BootFXD(QMainWindow):
 
         return frame
 
-
     # ============================================
     # CARDS
-    # ============================================
 
     def cards(self):
 
@@ -371,11 +340,7 @@ class BootFXD(QMainWindow):
 
         return frame
 
-
-    # ============================================
     # BASELINE
-    # ============================================
-
     def init_baseline(self):
 
         self.log.setText("Initializing baseline...")
@@ -399,11 +364,7 @@ class BootFXD(QMainWindow):
 
             self.log.setText("Baseline created successfully")
 
-
-    # ============================================
     # SCAN
-    # ============================================
-
     def scan(self):
 
         self.log.setText("Scanning boot integrity...")
@@ -449,10 +410,7 @@ class BootFXD(QMainWindow):
 
             self.log.setText(json.dumps(data, indent=4))
 
-
-    # ============================================
     # SHOW HISTORY
-    # ============================================
 
     def show_history(self):
 
@@ -504,11 +462,7 @@ class BootFXD(QMainWindow):
 
         dialog.exec()
 
-
-    # ============================================
-    # PROGRESS
-    # ============================================
-
+    # PROGRESS ANIMATION
     def animate_progress(self):
 
         self.progress_timer = QTimer()
@@ -526,11 +480,7 @@ class BootFXD(QMainWindow):
 
         self.progress_timer.start(50)
 
-
-    # ============================================
     # THEME
-    # ============================================
-
     def toggle_theme(self, state):
 
         if state:
@@ -538,11 +488,7 @@ class BootFXD(QMainWindow):
         else:
             self.setStyleSheet(DARK_THEME)
 
-
-# ============================================
 # MAIN
-# ============================================
-
 if __name__ == "__main__":
 
     app = QApplication(sys.argv)

@@ -9,10 +9,7 @@ using namespace bootfxd;
 
 namespace fs = std::filesystem;
 
-
-/*
- Recursively hash all regular files in directory
-*/
+//  Recursively hash all regular files in directory
 static void hash_directory(
     const string& prefix,
     const fs::path& directory,
@@ -54,10 +51,7 @@ static void hash_directory(
     }
 }
 
-
-/*
- Detect boot mode
-*/
+//  Detect boot mode
 string detect_boot_mode()
 {
     try
@@ -73,9 +67,8 @@ string detect_boot_mode()
 }
 
 
-/*
- Hash MBR using proper hashing API
-*/
+
+//  Hash MBR using proper hashing API
 static string hash_mbr()
 {
     try
@@ -95,10 +88,7 @@ static string hash_mbr()
     return "";
 }
 
-
-/*
- Collect hashes of boot-critical components
-*/
+//  Collect hashes of boot-critical components
 map<string, string> collect_hashes()
 {
     map<string, string> hashes;
