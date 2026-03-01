@@ -281,7 +281,6 @@ class BootFXD(QMainWindow):
 
         return frame
 
-    # ============================================
     # CARDS
 
     def cards(self):
