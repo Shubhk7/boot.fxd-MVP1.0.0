@@ -9,26 +9,23 @@ using namespace std;
 
 const string BASELINE_FILE = "output/baseline.json";
 
-
 void print_clean()
 {
     cout << "{ \"status\": \"clean\" }\n";
 }
 
-
-void print_error(const string& msg)
+void print_error(const string &msg)
 {
     cout << "{ \"status\": \"error\", \"message\": \"" << msg << "\" }\n";
 }
 
-
-void print_tampered(const CompareResult& r)
+void print_tampered(const CompareResult &r)
 {
     cout << "{\n";
     cout << "\"status\":\"tampered\",\n";
 
-    auto print_vec = [](const string& name,
-                        const vector<string>& v,
+    auto print_vec = [](const string &name,
+                        const vector<string> &v,
                         bool comma)
     {
         cout << "\"" << name << "\":[";
@@ -36,12 +33,14 @@ void print_tampered(const CompareResult& r)
         for (size_t i = 0; i < v.size(); i++)
         {
             cout << "\"" << v[i] << "\"";
-            if (i + 1 < v.size()) cout << ",";
+            if (i + 1 < v.size())
+                cout << ",";
         }
 
         cout << "]";
 
-        if (comma) cout << ",";
+        if (comma)
+            cout << ",";
 
         cout << "\n";
     };
@@ -52,7 +51,6 @@ void print_tampered(const CompareResult& r)
 
     cout << "}\n";
 }
-
 
 int init_mode()
 {
@@ -76,7 +74,6 @@ int init_mode()
 
     return 0;
 }
-
 
 int scan_mode()
 {
@@ -104,8 +101,7 @@ int scan_mode()
     return 2;
 }
 
-
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
     if (argc != 2)
     {
